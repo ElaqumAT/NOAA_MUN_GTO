@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tormentas_Clima_GTO</title>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:;">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            font-family: Arial, sans-serif;
+        }
+
+        .tab-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tab-header {
+            display: flex;
+            background-color: #e47b19;
+            border-bottom: 1px solid #000000;
+        }
+
+        .tab-button {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: inherit;
+            border: none;
+            outline: none;
+            transition: 0.3s;
+            font-size: 14px;
+            color: rgb(0, 0, 0); 
+        }
+
+        .tab-button:hover {
+            background-color: #79f83e;
+            color: black; 
+        }
+
+        .tab-button.active {
+            background-color: #2967da;
+            border-bottom: 2px solid #ffffff;
+            font-weight: light;
+            color: rgb(255, 255, 255);
+        }
+
+        .tab-content {
+            display: none;
+            flex: 1;
+            padding: 0;
+            border: none;
+            background-color: #fff;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        #map { 
+            width: 100%; 
+            height: 100%; 
+        }
+
+        .storm-label {
+            background: white;
+            padding: 2px 5px;
+            border: 1px solid black;
+            border-radius: 3px;
+            font-weight: bold;
+            text-align: center;
+            pointer-events: none;
+            transform: translateY(-15px);
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+            white-space: nowrap;
+        }
+
+        .leaflet-control-layers {
+            background: rgb(155, 252, 255, 0.7);
+            padding: 10px;
+            border-radius: 0px;
+            box-shadow: 0 0 0px rgba(0,0,0,0.2);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .leaflet-legend {
+            background: rgb(155, 252, 255, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 6px rgba(0,0,0,0.2);
+            font-size: 12px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .legend-title {
+            margin: 0 0 10px 0;
+            font-weight: bold;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 5px;
+            font-size: 14px;
+        }
+        .legend-item {
+            margin: 1px 0;
+            display: flex;
+            align-items: center;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            display: inline-block;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .legend-line {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 3px;
+            transform: translateY(-50%);
+        }
+        .legend-polygon {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        .legend-polygon-fill {
+            width: 100%;
+            height: 100%;
+            background-color: red;
+            opacity: 0.3;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .legend-polygon-outline {
+            width: 100%;
+            height: 100%;
+            border: 2px solid red;
+            position: absolute;
+            top: 0;
+            left: 0;
+            box-sizing: border-box;
+        }
+
+        .leaflet-control-coordinates {
+            background: rgba(155, 252, 255, 0.7);
+            padding: 5px 15px;
+            margin-bottom: 30px;
+            font-size: 14px;
+            border-radius: 20px;
+            border: 1px solid #ccc;
+        }
+
+        .leaflet-control-status {
+            background: rgba(155, 252, 255, 0.7);
+            padding: 5px 30px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            border-radius: 20px;
+            border: 1px solid #ccc;
+            min-width: 170px;
+            max-width: 400px;
+            white-space: normal;
+            word-break: break-word;
+        }
+        .status-text {
+            display: inline-block;
+            margin-left: 25px;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border: 2px solid rgba(0,0,0,0.2);
+            border-radius: 50%;
+            border-top-color: #000c74c7;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .leaflet-popup-content {
+            font-size: 13px;
+            min-width: 200px;
+        }
+        .leaflet-popup-content b {
+            color: #333;
+        }
+
+        .leaflet-control-status-container {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+    </style>
+</head>
+<body>
+    <div class="tab-container">
+        <div class="tab-header">
+        </div>
+        <div id="tab1" class="tab-content active">
+            <div id="map"></div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+
+            function openTab(evt, tabName) {
+                const tabContents = document.getElementsByClassName("tab-content");
+                for (let i = 0; i < tabContents.length; i++) {
+                    tabContents[i].classList.remove("active");
+                }
+
+                const tabButtons = document.getElementsByClassName("tab-button");
+                for (let i = 0; i < tabButtons.length; i++) {
+                    tabButtons[i].classList.remove("active");
+                }
+
+                document.getElementById(tabName).classList.add("active");
+                evt.currentTarget.classList.add("active");
+
+                if (tabName === 'tab1') {
+                    setTimeout(() => {
+                        if (map) map.invalidateSize();
+                    }, 100);
+                }
+            }
+
+
+            const BASE_URL = "https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/Active_Hurricanes_v1/FeatureServer";
+            const CAP_URL = "https://services9.arcgis.com/RHVPKKiFTONKtxq3/ArcGIS/rest/services/CAP_Alerts_Feed/FeatureServer";
+            
+
+            // CartoDB DarkMatter como opcion secundaria para mapa base
+            const darkMatter = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://carto.com/">CARTO</a> | Datos: NOAA, NHC, CPHC, JTWC, USNO',
+                subdomains: 'abcd',
+                maxZoom: 19
+            });
+
+            // Mapa de OpenStreetMap 
+            const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/#map=5/23.94/-102.58/">Open Street Map</a>| Datos: NOAA, NHC, CPHC, JTWC, USNO'
+            });
+
+            const baseMaps = {
+                "OpenStreetMap": osm,
+                "DarkMatter": darkMatter
+            };
+
+            const map = L.map('map', {
+                center: [20.95, -101.025],
+                zoom: 9,
+                layers: [osm] // Mapa OSM por defecto
+            });
+            
+
+            const statusContainer = L.control({position: 'bottomleft'});
+            statusContainer.onAdd = function() {
+                this._container = L.DomUtil.create('div', 'leaflet-control-status-container');
+
+                const statusDiv = L.DomUtil.create('div', 'leaflet-control-status', this._container);
+                const spinner = L.DomUtil.create('span', 'loading-spinner', statusDiv);
+                const statusText = L.DomUtil.create('span', 'status-text', statusDiv);
+                statusText.textContent = 'Cargando datos...';
+                statusText.id = 'statusText';
+                
+
+                const coordDiv = L.DomUtil.create('div', 'leaflet-control-coordinates', this._container);
+                coordDiv.id = 'coordDisplay';
+                coordDiv.textContent = 'Lat: 0.000 | Lon: 0.000';
+                
+                return this._container;
+            };
+            statusContainer.addTo(map);
+            
+            // Control de coordenadas
+            map.on('mousemove', function(e) {
+                const lat = e.latlng.lat.toFixed(3);
+                const lng = e.latlng.lng.toFixed(3);
+                document.getElementById('coordDisplay').textContent = `Lat: ${lat} | Lon: ${lng}`;
+            });
+            
+            // Construcción de grupos de capas para las diferentes capas del mapa
+            const layerGroups = {
+                "Cono de Error: Pronóstico": L.featureGroup(),
+                "Trayectoria Observada": L.featureGroup(),
+                "Pronóstico de Trayectoria": L.featureGroup(),
+                "Posición Observada": L.featureGroup(),
+                "Pronóstico de Posición": L.featureGroup(),
+                "Lluvia": L.layerGroup(),
+                "Nubosidad": L.layerGroup(),
+                "Municipios": L.featureGroup(),
+                "Cuerpos de Agua": L.featureGroup(),
+                "Rios Principales": L.featureGroup(), 
+                "Alertas CAP": L.featureGroup()
+            };
+            // Añadir grupos de capas al mapa con las que va inicializar
+            layerGroups["Municipios"].addTo(map);
+            layerGroups["Cuerpos de Agua"].addTo(map);
+            layerGroups["Rios Principales"].addTo(map);
+
+
+            // Cargra capas de lluvia y nubosidad 
+            const rainLayer = L.tileLayer('https://tile.openweathermap.org/map/rain/{z}/{x}/{y}.png?appid=46a808b67592e40e7f43d9e5aa84c16c', {
+                attribution: '&copy; <a href="https://openweathermap.org/">OpenWeatherMap</a>',
+                opacity: 0.6
+            });
+            layerGroups["Lluvia"].addLayer(rainLayer);  // Aggregar la capa de lluvia al grupo pero sin inicializarla en el mapa
+
+            const cloudLayer = L.tileLayer('https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=e662442aedac0ef1b1137b3904a3cc77', {
+                attribution: '&copy; <a href="https://openweathermap.org/">OpenWeatherMap</a>',
+                opacity: 1
+            });
+            layerGroups["Nubosidad"].addLayer(cloudLayer);
+
+
+            const layerControl = L.control.layers(baseMaps, layerGroups, {
+                collapsed: false,
+                position: 'topright'
+            }).addTo(map);
+
+            const legendItems = {
+                "errorCone": {
+                    title: "Cono de Error: Pronóstico",
+                    items: [
+                        { type: 'polygon', color: 'red', fillColor: 'red', opacity: 0.3, weight: 2, label: 'Área de posible trayectoria' }
+                    ]
+                },
+                "observedTrack": {
+                    title: "Trayectoria Observada",
+                    items: [
+                        { type: 'line', color: 'blue', weight: 3, opacity: 0.7, label: 'Perturbación' },
+                        { type: 'line', color: 'green', weight: 3, opacity: 0.7, label: 'Depresión tropical' },
+                        { type: 'line', color: 'yellow', weight: 3, opacity: 0.7, label: 'Tormenta tropical' },
+                        { type: 'line', color: 'orange', weight: 3, opacity: 0.7, label: 'Huracán Categoría 1' },
+                        { type: 'line', color: 'darkorange', weight: 3, opacity: 0.7, label: 'Huracán Categoría 2' },
+                        { type: 'line', color: 'red', weight: 3, opacity: 0.7, label: 'Huracán Categoría 3' },
+                        { type: 'line', color: 'darkred', weight: 3, opacity: 0.7, label: 'Huracán Categoría 4' },
+                        { type: 'line', color: 'purple', weight: 3, opacity: 0.7, label: 'Huracán Categoría 5' }
+                    ]
+                },
+                "rain": {
+                    title: "Lluvia",
+                    items: [
+                        { type: 'circle', color: 'blue', fillColor: 'blue', radius: 8, weight: 1, label: 'Precipitación' }
+                    ]
+                },
+                "clouds": {
+                    title: "Nubosidad",
+                    items: [
+                        { type: 'circle', color: 'white', fillColor: 'white', radius: 8, weight: 1, label: 'Cobertura de nubes' }
+                    ]
+                },
+                "municipalities": {
+                    title: "Municipios",
+                    items: [
+                        { type: 'polygon', color: 'darkgreen', fillColor: 'darkgreen', opacity: 0, weight: 2, label: 'Límites municipales' }
+                    ]
+                },
+                "waterBodies": {
+                    title: "Cuerpos de Agua",
+                    items: [
+                        { type: 'polygon', color: 'blue', fillColor: 'blue', opacity: 0.5, weight: 1, label: 'Cuerpo de agua' }
+                    ]
+                },
+                "mainRivers": {
+                    title: "Ríos Principales",
+                    items: [
+                        { type: 'line', color: 'darkblue', weight: 2, opacity: 0.8, label: 'Río principal' }
+                    ]
+                },
+                "capAlerts": {
+                    title: "Alertas CAP",
+                    items: [
+                        { type: 'polygon', color: 'red', fillColor: 'red', opacity: 0.5, weight: 1, label: 'Extremo' },
+                        { type: 'polygon', color: 'orange', fillColor: 'orange', opacity: 0.5, weight: 1, label: 'Severo' },
+                        { type: 'polygon', color: 'yellow', fillColor: 'yellow', opacity: 0.5, weight: 1, label: 'Moderado' },
+                        { type: 'polygon', color: 'blue', fillColor: 'blue', opacity: 0.5, weight: 1, label: 'Menor' },
+                        { type: 'polygon', color: 'gray', fillColor: 'gray', opacity: 0.5, weight: 1, label: 'Desconocido' }
+                    ]
+                }
+            };
+
+
+            function updateLegend() {
+                const visibleLayers = [];
+                
+
+                Object.keys(layerGroups).forEach(layerName => {
+                    if (map.hasLayer(layerGroups[layerName])) {
+                        visibleLayers.push(layerName);
+                    }
+                });
+
+
+                const div = L.DomUtil.create('div', 'leaflet-legend');
+                const title = L.DomUtil.create('div', 'legend-title', div);
+                title.textContent = 'Simbología';
+
+
+                if (visibleLayers.includes("Cono de Error: Pronóstico")) {
+                    const subtitle = L.DomUtil.create('div', '', div);
+                    subtitle.textContent = legendItems.errorCone.title;
+                    subtitle.style.fontWeight = 'bold';
+                    subtitle.style.margin = '8px 0 4px 0';
+
+                    legendItems.errorCone.items.forEach(item => {
+                        createLegendItem(div, item);
+                    });
+                }
+
+                if (visibleLayers.includes("Trayectoria Observada")) {
+                    const subtitle = L.DomUtil.create('div', '', div);
+                    subtitle.textContent = legendItems.observedTrack.title;
+                    subtitle.style.fontWeight = 'bold';
+                    subtitle.style.margin = '8px 0 4px 0';
+
+                    legendItems.observedTrack.items.forEach(item => {
+                        createLegendItem(div, item);
+                    });
+                }
+
+
+                if (visibleLayers.includes("Municipios")) {
+                    const subtitle = L.DomUtil.create('div', '', div);
+                    subtitle.textContent = legendItems.municipalities.title;
+                    subtitle.style.fontWeight = 'bold';
+                    subtitle.style.margin = '8px 0 4px 0';
+
+                    legendItems.municipalities.items.forEach(item => {
+                        createLegendItem(div, item);
+                    });
+                }
+                if (visibleLayers.includes("Cuerpos de Agua")) {
+                    const subtitle = L.DomUtil.create('div', '', div);
+                    subtitle.textContent = legendItems.waterBodies.title;
+                    subtitle.style.fontWeight = 'bold';
+                    subtitle.style.margin = '8px 0 4px 0';
+
+                    legendItems.waterBodies.items.forEach(item => {
+                    createLegendItem(div, item);
+                });
+                }
+                
+                if (visibleLayers.includes("Rios Principales")) {
+                    const subtitle = L.DomUtil.create('div', '', div);
+                    subtitle.textContent = legendItems.mainRivers.title;
+                    subtitle.style.fontWeight = 'bold';
+                    subtitle.style.margin = '8px 0 4px 0';
+
+                    legendItems.mainRivers.items.forEach(item => {
+                        createLegendItem(div, item);
+                    });
+                }
+                
+                if (visibleLayers.includes("Alertas CAP")) {
+                    const subtitle = L.DomUtil.create('div', '', div);
+                    subtitle.textContent = legendItems.capAlerts.title;
+                    subtitle.style.fontWeight = 'bold';
+                    subtitle.style.margin = '8px 0 4px 0';
+
+                    legendItems.capAlerts.items.forEach(item => {
+                        createLegendItem(div, item);
+                    });
+                }
+
+                return div;
+            }
+
+            const legend = L.control({ position: 'topright' });
+            legend.onAdd = function(map) {
+                return updateLegend();
+            };
+            legend.addTo(map);
+
+
+            map.on('overlayadd overlayremove', function() {
+                legend.update();
+            });
+
+
+            legend.update = function() {
+                this._container.innerHTML = '';
+                this._container.appendChild(updateLegend());
+            };
+
+            function createLegendItem(container, options) {
+                const item = L.DomUtil.create('div', 'legend-item', container);
+                
+                const colorBox = L.DomUtil.create('span', 'legend-color', item);
+                
+                if (options.type === 'line') {
+                    const line = L.DomUtil.create('div', 'legend-line', colorBox);
+                    line.style.backgroundColor = options.color;
+                    line.style.height = `${options.weight}px`;
+                    line.style.opacity = options.opacity;
+                } 
+                else if (options.type === 'circle') {
+                    colorBox.style.borderRadius = '50%';
+                    colorBox.style.border = `${options.weight}px solid ${options.color}`;
+                    colorBox.style.backgroundColor = options.fillColor;
+                    colorBox.style.width = `${options.radius * 2}px`;
+                    colorBox.style.height = `${options.radius * 2}px`;
+                } 
+                else if (options.type === 'polygon') {
+                    const polygonContainer = L.DomUtil.create('div', 'legend-polygon', colorBox);
+                    const fill = L.DomUtil.create('div', 'legend-polygon-fill', polygonContainer);
+                    const outline = L.DomUtil.create('div', 'legend-polygon-outline', polygonContainer);
+                    
+                    fill.style.backgroundColor = options.fillColor;
+                    fill.style.opacity = options.opacity;
+                    outline.style.border = `${options.weight}px solid ${options.color}`;
+                }
+                
+                const label = L.DomUtil.create('span', '', item);
+                label.textContent = options.label;
+                label.style.marginLeft = '8px';
+            }
+
+            async function loadMunicipalities() {
+                try {
+                    const response = await fetch('mun.geojson');
+                    if (!response.ok) throw new Error('Falla al cargar limites municipales');
+                    
+                    const geojsonData = await response.json();
+                    
+                    L.geoJSON(geojsonData, {
+                        style: function(feature) {
+                            return {
+                                fillColor: 'darkgreen',
+                                weight: 2,
+                                opacity: 1,
+                                color: 'darkgreen',
+                                fillOpacity: 0
+                            };
+                        },
+                        onEachFeature: function(feature, layer) {
+                            if (feature.properties && feature.properties.name) {
+                                layer.bindPopup(`<b>${feature.properties.name}</b>`);
+                            }
+                        }
+                    }).addTo(layerGroups["Municipios"]);
+                    
+                    console.log('Capa de municipos cargada correctamente');
+                } catch (error) {
+                    console.error('Error al cargar limites municipales:', error);
+                    updateStatus(`Error al cargar limites municipales: ${error.message}`, true);
+                }
+            }
+            
+
+            async function loadCAPAlerts() {
+                try {
+                    const url = `${CAP_URL}/0/query?where=1=1&outFields=*&f=json&outSR=4326`;
+                    
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error('Falla al cargar alertas CAP');
+                    
+                    const data = await response.json();
+                    const features = data.features || [];
+                    
+                    if (features.length === 0) {
+                        console.log('No hay alertas CAP disponibles');
+                        return;
+                    }
+
+                    layerGroups["Alertas CAP"].clearLayers();
+
+                    const severityColors = {
+                        'Extreme': 'red',
+                        'Severe': 'orange',
+                        'Moderate': 'yellow',
+                        'Minor': 'blue',
+                        'Unknown': 'gray'
+                    };
+
+                    features.forEach(feature => {
+                        const severity = feature.attributes.severity || 'Unknown';
+                        const color = severityColors[severity] || 'gray';
+
+                        let geojsonFeature;
+                        if (feature.geometry && feature.geometry.rings) {
+                            geojsonFeature = {
+                                type: "Feature",
+                                geometry: {
+                                    type: "Polygon",
+                                    coordinates: feature.geometry.rings
+                                },
+                                properties: feature.attributes
+                            };
+                        } else {
+                            geojsonFeature = feature; 
+                        }
+
+                        const polygon = L.geoJSON(geojsonFeature, {
+                            style: {
+                                fillColor: color,
+                                color: color,
+                                weight: 1,
+                                opacity: 1,
+                                fillOpacity: 0.5
+                            },
+                            onEachFeature: function(feature, layer) {
+                                const props = feature.properties || feature.attributes;
+                                let popupContent = `<b>${props.event || 'Alerta'}</b><br>`;
+                                popupContent += `<b>Severidad:</b> ${severity}<br>`;
+                                popupContent += `<b>Emitido:</b> ${props.sent ? new Date(props.sent).toLocaleString() : ''}<br>`;
+                                popupContent += `<b>Descripción:</b> ${props.description || 'No disponible'}`;
+                                layer.bindPopup(popupContent);
+                            }
+                        });
+
+                        layerGroups["Alertas CAP"].addLayer(polygon);
+                    });
+                    
+                    console.log('Alertas CAP cargadas correctamente');
+                } catch (error) {
+                    console.error('Error al cargar alertas CAP:', error);
+                    updateStatus(`Error al cargar alertas CAP: ${error.message}`, true);
+                }
+            }
+
+            const STORM_COLORS = {
+                'Tropical Low': 'blue', 
+                'Subtropical Depression': 'green', 
+                'Tropical Depression': 'green',
+                'Subtropical Storm': 'yellow', 
+                'Tropical Storm': 'yellow',
+                'Hurricane': 'red', 
+                'Major Hurricane': 'darkred'
+            };
+            
+            const STORM_COLORS2 = {
+                'Low': 'blue', 
+                'Remnant Low': 'blue', 
+                'Disturbance': 'blue',
+                'Subtropical Storm': 'blue', 
+                'Tropical Wave': 'blue',
+                'Tropical Depression': 'green', 
+                'Tropical Storm': 'yellow',
+                'Hurricane1': 'orange', 
+                'Hurricane2': 'darkorange',
+                'Hurricane3': 'red', 
+                'Hurricane4': 'darkred', 
+                'Hurricane5': 'purple'
+            };
+
+            function getPolygonTopCenter(coords) {
+                let maxLat = -90, centerLng = 0;
+                coords.forEach(coord => {
+                    if (coord[0] > maxLat) maxLat = coord[0];
+                    centerLng += coord[1];
+                });
+                return [maxLat, centerLng / coords.length];
+            }
+
+            function updateStatus(text, isError = false) {
+                const statusText = document.getElementById('statusText');
+                if (statusText) {
+                    statusText.textContent = text;
+                    statusText.style.color = isError ? 'red' : 'inherit';
+                    
+                    const spinner = document.querySelector('.loading-spinner');
+                    if (spinner) {
+                        spinner.style.display = isError ? 'none' : 'inline-block';
+                    }
+                }
+            }
+
+            async function updateMap() {
+                updateStatus(`Actualizando sistema... ${new Date().toLocaleTimeString()}`);
+                
+                try {
+                    Object.values(layerGroups).forEach(group => {
+                        if (group !== layerGroups["Lluvia"] && group !== layerGroups["Nubosidad"]) {
+                            group.clearLayers();
+                        }
+                    });
+
+                    await loadMunicipalities();
+                    await loadCAPAlerts();
+                    await loadWaterBodies();
+                    await loadMainRivers();
+                    
+                    for (let layerId of [4, 3, 2, 1, 0]) {
+                        await addLayerToMap(layerId);
+                    }
+                    
+                    updateStatus(`Sistema actualizado: ${new Date().toLocaleTimeString()}`);
+                } catch (error) {
+                    console.error('Error al cargar datos:', error);
+                    updateStatus(`Error al cargar datos: ${error.message}`, true);
+                }
+            }
+
+            async function addLayerToMap(layerId) {
+                const url = `${BASE_URL}/${layerId}/query?where=1=1&outFields=*&f=json&outSR=4326`;
+
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    
+                    const data = await response.json();
+                    const features = data.features || [];
+
+                    if (features.length === 0) {
+                        console.log(`No data in Layer ${layerId}`);
+                        return;
+                    }
+
+                    let targetGroup;
+                    switch(layerId) {
+                        case 0: targetGroup = layerGroups["Pronóstico de Posición"]; break;
+                        case 1: targetGroup = layerGroups["Posición Observada"]; break;
+                        case 2: targetGroup = layerGroups["Pronóstico de Trayectoria"]; break;
+                        case 3: targetGroup = layerGroups["Trayectoria Observada"]; break;
+                        case 4: targetGroup = layerGroups["Cono de Error: Pronóstico"]; break;
+                    }
+                    features.forEach(feature => {
+    const props = feature.attributes || {};
+    const geom = feature.geometry || {};
+    const coords = geom.rings || geom.paths || [geom.x, geom.y];
+
+    // Pronóstico de Posición
+    if (layerId === 0 && coords.length === 2) {
+        const [lon, lat] = coords;
+        const stormType = props.TCDVLP || 'Unknown';
+        const markerColor = STORM_COLORS[stormType] || 'gray';
+
+        L.circleMarker([lat, lon], {
+            radius: 4,
+            color: 'black',
+            fillColor: markerColor,
+            fillOpacity: 1,
+            weight: 1
+        }).bindPopup(`
+            <b>Nombre de Tormenta:</b> ${props.STORMNAME || 'N/A'}<br>
+            <b>Tipo de Tormenta:</b> ${props.TCDVLP || 'N/A'}<br>
+            <b>Fecha de alcance:</b> ${props.FLDATELBL || 'N/A'}<br>
+            <b>Lat/Lon:</b> ${lat.toFixed(2)}, ${lon.toFixed(2)}<br>
+            <b>Viento Máx:</b> ${props.MAXWIND || 'N/A'} kt<br>
+            <b>Rafagas Máx:</b> ${props.GUST || 'N/A'} kt<br>
+        `).addTo(targetGroup);
+    }
+    // Posición Observada
+    else if (layerId === 1 && coords.length === 2) {
+        const [lon, lat] = coords;
+        const stormType = props.STORMTYPE || 'Unknown';
+        const markerColor = STORM_COLORS2[stormType] || 'gray';
+
+        L.circleMarker([lat, lon], {
+            radius: 5,
+            color: 'black',
+            fillColor: markerColor,
+            fillOpacity: 1,
+            weight: 1
+        }).bindPopup(`
+            <b>Nombre de Tormenta:</b> ${props.STORMNAME || 'N/A'}<br>
+            <b>Tipo de Tormenta:</b> ${props.STORMTYPE || 'N/A'}<br>
+            <b>Fecha Observada:</b> ${props.DTG ? new Date(props.DTG).toLocaleString() : 'N/A'}<br>
+            <b> Velocidad Maxima del Viento:</b> ${props.INTENSITY || 'N/A'} kt<br>
+            <b>Lat/Lon:</b> ${lat.toFixed(2)}, ${lon.toFixed(2)}<br>
+        `).addTo(targetGroup);
+    }
+    // Pronóstico de Trayectoria
+    else if (layerId === 2 && coords.length > 0) {
+        const path = coords[0].map(coord => [coord[1], coord[0]]);
+        const stormType = props.STORMTYPE || 'Unknown';
+        const lineColor = STORM_COLORS2[stormType] || 'black';
+        const stormName = props.STORMNAME || 'Tormenta sin nombre';
+
+        const line = L.polyline(path, {
+            color: lineColor,
+            weight: 2,
+            opacity: 0.7,
+            dashArray: '5, 5'
+        }).bindPopup(`
+            <b>Pronóstico de Trayectoria:</b> ${stormName}<br>
+            <b>Fecha de pronóstico:</b> ${props.ADVDATE ? new Date(props.ADVDATE).toLocaleString() : 'N/A'}
+        `).addTo(targetGroup);
+        path.forEach((point, idx) => {
+            if (idx % 3 === 0) { 
+                const forecastHour = idx * 6;
+                L.circleMarker(point, {
+                    radius: 3,
+                    color: 'black',
+                    fillColor: lineColor,
+                    fillOpacity: 1,
+                    weight: 1
+                }).bindPopup(`
+                    <b>${stormName}</b><br>
+                    <b>Posición pronosticada</b><br>
+                    <b>Hora +${forecastHour}h</b><br>
+                    <b>Lat/Lon:</b> ${point[0].toFixed(2)}, ${point[1].toFixed(2)}
+                `).addTo(targetGroup);
+            }
+        });
+    }
+    // Trayectoria Observada
+    else if (layerId === 3 && coords.length > 0) {
+        const path = coords[0].map(coord => [coord[1], coord[0]]);
+        const lineColor = STORM_COLORS2[props.STORMTYPE] || 'red';
+
+        L.polyline(path, {
+            color: lineColor,
+            weight: 3,
+            opacity: 0.7
+        }).bindPopup(`
+            <b>Trayectoria Observada:</b> ${props.STORMNAME || 'N/A'}<br>
+            <b>Tipo:</b> ${props.STORMTYPE || 'N/A'}<br>
+            <b>Fecha de inicio:</b> ${props.STARTDTG ? new Date(props.STARTDTG).toLocaleDateString() : 'N/A'}<br>
+            <b>Fecha de fin:</b> ${props.ENDDTG ? new Date(props.ENDDTG).toLocaleDateString() : 'N/A'}
+        `).addTo(targetGroup);
+    }
+    // Cono de Error: Pronóstico
+    else if (layerId === 4 && coords.length > 0) {
+        const polygons = coords.map(poly => poly.map(coord => [coord[1], coord[0]]));
+        const stormName = props.STORMNAME || 'Tormenta sin nombre';
+        const advisoryDate = props.ADVDATE ? new Date(props.ADVDATE).toLocaleString() : 'N/A';
+
+        polygons.forEach(poly => {
+            const polygon = L.polygon(poly, {
+                color: 'red',
+                fillColor: 'red',
+                fillOpacity: 0.3,
+                weight: 2
+            }).bindPopup(`
+                <b>Cono de Error:</b> ${stormName}<br>
+                <b>Fecha de pronóstico:</b> ${advisoryDate}<br>
+                <b>Área de posible trayectoria</b>
+            `).addTo(targetGroup);
+
+            // Opcional: Añadir un marcador en el centro del polígono para el nombre de la tormenta
+            if (poly === polygons[0]) {
+                const labelPos = getPolygonTopCenter(poly);
+                L.marker([labelPos[0] + 0.3, labelPos[1]], { 
+                    icon: L.divIcon({
+                        html: `<div class="storm-label">${stormName}</div>`,
+                        className: '',
+                        iconSize: null
+                    }),
+                    zIndexOffset: 1500,
+                    interactive: false
+                }).addTo(targetGroup);
+            }
+        });
+    }
+});
+
+                    console.log(`Added Layer ${layerId}`);
+                } catch (error) {
+                    console.error(`Failed to load Layer ${layerId}:`, error);
+                    throw error;
+                }
+            }
+
+            async function loadWaterBodies() {
+                try {
+                    const response = await fetch('cd_agua.geojson');
+                    if (!response.ok) throw new Error('Falla al cargar cuerpos de agua');
+                    
+                    const geojsonData = await response.json();
+                    L.geoJSON(geojsonData, {
+                        style: {
+                            fillColor: 'blue',
+                            color: 'blue',
+                            weight: 1,
+                            opacity: 1,
+                            fillOpacity: 0.6
+                        },
+                        onEachFeature: function(feature, layer) {
+                            if (feature.properties && feature.properties.name) {
+                                layer.bindPopup(`<b>${feature.properties.name}</b>`);
+                            }
+                        }
+                    }).addTo(layerGroups["Cuerpos de Agua"]);
+                    console.log('Cuerpos de agua cargados correctamente');
+                } catch (error) {
+                    console.error('Error al cargar cuerpos de agua:', error);
+                    updateStatus(`Error al cargar cuerpos de agua: ${error.message}`, true);
+                }
+            }
+
+            async function loadMainRivers() {
+                try {
+                    const response = await fetch('rios.geojson');
+                    if (!response.ok) throw new Error('Falla al cargar ríos principales');
+                    
+                    const geojsonData = await response.json();
+                    L.geoJSON(geojsonData, {
+                        style: {
+                            color: 'darkblue',
+                            weight: 2,
+                            opacity: 1
+                        },
+                        onEachFeature: function(feature, layer) {
+                            if (feature.properties && feature.properties.name) {
+                                layer.bindPopup(`<b>${feature.properties.name}</b>`);
+                            }
+                        }
+                    }).addTo(layerGroups["Rios Principales"]);
+                    console.log('Ríos principales cargados correctamente');
+                } catch (error) {
+                    console.error('Error al cargar ríos principales:', error);
+                    updateStatus(`Error al cargar ríos principales: ${error.message}`, true);
+                }
+            }
+
+          updateMap();
+            setInterval(updateMap, 3600000); // Actualizar cada hora (36000000 ms = 1 hora) / (1 ms = 0.000001 horas)
+        });
+    </script>
+</body>
+</html>
